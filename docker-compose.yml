@@ -1,0 +1,62 @@
+services:
+  # PostgreSQL service
+  postgres:
+    image: postgres:latest
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"  # Use variable for PostgreSQL port
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      
+  # InfluxDB v2 service
+  influxdb:
+    image: influxdb:2.0
+    container_name: influxdb
+    ports:
+      - "8087:8086"
+    environment:
+      INFLUXDB_ADMIN_USER: ${INFLUXDB_INIT_USERNAME}
+      INFLUXDB_ADMIN_PASSWORD: ${INFLUXDB_INIT_PASSWORD}
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_INIT_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_INIT_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_INIT_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_INIT_BUCKET}
+      DOCKER_INFLUXDB_INIT_RETENTION: ${INFLUXDB_INIT_RETENTION}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_TOKEN}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      
+  # Grafana service
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3009:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+    depends_on:
+      - influxdb
+      - postgres
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  # Flask service
+  flask:
+    build: ./flask
+    container_name: flask_app
+    ports:
+      - "${FLASK_PORT}:5000"
+    depends_on:
+      - postgres
+      - influxdb
+
+volumes:
+  postgres_data:
+  influxdb_data:
+  grafana_data:
+
