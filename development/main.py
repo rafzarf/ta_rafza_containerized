@@ -17,8 +17,13 @@ influx_client = InfluxDBClient(
     org=os.environ.get('INFLUXDB_INIT_ORG')
 )
 
-# PostgreSQL connection
 def get_db_connection():
+    """
+    Establishes a connection to the PostgreSQL database.
+    
+    Purpose: To provide a reusable function for connecting to the database,
+    ensuring consistent connection parameters across the application.
+    """
     conn = psycopg2.connect(
         host="postgres",
         database=os.environ.get('POSTGRES_DB'),
@@ -29,10 +34,21 @@ def get_db_connection():
 
 @app.route('/')
 def home():
+    """
+    Defines the root endpoint of the Flask application.
+    
+    Purpose: To provide a simple health check and confirm that the Flask app is running.
+    """
     return jsonify(message="Hello from Flask mock app!")
 
 @app.route('/db-check')
 def db_check():
+    """
+    Checks the status of both InfluxDB and PostgreSQL databases.
+    
+    Purpose: To ensure that the application can connect to and interact with both 
+    databases, providing a quick way to verify database connectivity.
+    """
     influx_health = influx_client.health()
     
     pg_conn = get_db_connection()
@@ -48,6 +64,13 @@ def db_check():
     })
 
 def run_esp32_simulator():
+    """
+    Simulates an ESP32 device publishing vibration data to an MQTT broker.
+    
+    Purpose: To generate mock vibration data for testing and development purposes
+    when a physical ESP32 device is not available. It implements retry logic to
+    handle potential connection issues with the MQTT broker.
+    """
     max_retries = 5
     retry_delay = 5  # seconds
 
@@ -73,6 +96,14 @@ def run_esp32_simulator():
                 break
 
 if __name__ == '__main__':
+    """
+    Main entry point of the application.
+    
+    Purpose: To start the ESP32 simulator in a separate thread and run both Flask 
+    applications (main and prediction) concurrently. This allows the system to 
+    simulate data generation, process incoming requests, and make predictions 
+    simultaneously.
+    """
     # Start ESP32 simulator in a separate thread
     simulator_thread = threading.Thread(target=run_esp32_simulator)
     simulator_thread.start()
