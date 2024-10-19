@@ -6,20 +6,27 @@ services:
       dockerfile: Dockerfile # Specify the Dockerfile location in the 'docker' directory
     container_name: flask_app
     ports:
-      - "${FLASK_PORT}:5000"
+      - "${FLASK_MAIN_PORT}:5000"
+      - "${FLASK_PREDICTION_PORT}:5001"
     volumes:
       - ./development:/app # Map the 'development' folder to '/app' inside the container
     depends_on:
-      - postgres
       - influxdb
+      - nodered
+      - mosquitto
     environment:
       - FLASK_ENV=development
       - FLASK_DEBUG=1
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
+      - INFLUXDB_URL=${INFLUXDB_URL}
       - INFLUXDB_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
       - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
+      - INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - FLASK_MAIN_PORT=${FLASK_MAIN_PORT}
+      - FLASK_PREDICTION_PORT=${FLASK_PREDICTION_PORT}
+    restart: unless-stopped # Add this line for fault tolerance
 
   # Grafana service
   grafana:
@@ -54,7 +61,7 @@ services:
     image: influxdb:2.0
     container_name: influxdb
     ports:
-      - "8087:8086"
+      - "${INFLUXDB_PORT}:8086" # We'll use an environment variable for the port
     environment:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME}
@@ -71,13 +78,24 @@ services:
     image: eclipse-mosquitto:latest
     container_name: mosquitto
     ports:
-      - "1883:1883" # MQTT
-      - "9001:9001" # WebSockets
+      - "${MQTT_PORT}:1883"
+      - "${MQTT_WS_PORT}:9001" # WebSockets
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     restart: unless-stopped
+
+  # Node-RED service
+  nodered:
+    image: nodered/node-red:latest
+    container_name: nodered
+    ports:
+      - "${NODERED_PORT}:1880"
+    volumes:
+      - nodered_data:/data
+    depends_on:
+      - influxdb
 
 volumes:
   postgres_data:
@@ -85,5 +103,4 @@ volumes:
   grafana_data:
   mosquitto_data:
   mosquitto_log:
-
-
+  nodered_data:
