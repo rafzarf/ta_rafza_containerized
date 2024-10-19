@@ -1,3 +1,7 @@
-influxdb_client
-Flask==2.0.3
+influxdb-client==1.36.1
+Flask==2.3.2
+psycopg2-binary==2.9.6
+paho-mqtt==1.6.1
+
+
 

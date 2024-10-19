@@ -6,12 +6,20 @@ services:
       dockerfile: Dockerfile # Specify the Dockerfile location in the 'docker' directory
     container_name: flask_app
     ports:
-      - "5000:5000"
+      - "${FLASK_PORT}:5000"
     volumes:
       - ./development:/app # Map the 'development' folder to '/app' inside the container
     depends_on:
       - postgres
       - influxdb
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - INFLUXDB_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
 
   # Grafana service
   grafana:
@@ -37,7 +45,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5342:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -46,16 +54,15 @@ services:
     image: influxdb:2.0
     container_name: influxdb
     ports:
-      - "8087:8086"
+      - "8086:8086"
     environment:
-      INFLUXDB_ADMIN_USER: ${INFLUXDB_INIT_USERNAME}
-      INFLUXDB_ADMIN_PASSWORD: ${INFLUXDB_INIT_PASSWORD}
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_INIT_USERNAME}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_INIT_PASSWORD}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_INIT_ORG}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_INIT_BUCKET}
-      DOCKER_INFLUXDB_INIT_RETENTION: ${INFLUXDB_INIT_RETENTION}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_TOKEN}
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_INIT_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
+      - DOCKER_INFLUXDB_INIT_RETENTION=${INFLUXDB_INIT_RETENTION}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
     volumes:
       - influxdb_data:/var/lib/influxdb2
 
@@ -67,9 +74,9 @@ services:
       - "1883:1883" # MQTT
       - "9001:9001" # WebSockets
     volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
     restart: unless-stopped
 
 volumes:
