@@ -1,12 +1,15 @@
 import os
+import sys
 import threading
-import time
 from flask import Flask, jsonify
 from influxdb_client import InfluxDBClient
 import psycopg2
-import paho.mqtt.client as mqtt
-from vibration_sensor import VibrationSensor
 from prediction_api import app as prediction_app
+
+# Add the sensor_simulator directory to the Python path
+sys.path.append('/sensor_simulator')
+
+from vibration_sensor import VibrationSensor
 
 app = Flask(__name__)
 
@@ -63,52 +66,7 @@ def db_check():
         "postgres_version": pg_version
     })
 
-def run_esp32_simulator():
-    """
-    Simulates an ESP32 device publishing vibration data to an MQTT broker.
-    
-    Purpose: To generate mock vibration data for testing and development purposes
-    when a physical ESP32 device is not available. It implements retry logic to
-    handle potential connection issues with the MQTT broker.
-    """
-    max_retries = 5
-    retry_delay = 5  # seconds
-
-    for attempt in range(max_retries):
-        try:
-            client = mqtt.Client()
-            client.connect("mosquitto", 1883, 60)
-            
-            sensor = VibrationSensor()
-
-            while True:
-                vibration = sensor.get_reading()
-                client.publish("vibration/data", str(vibration))
-                print(f"Published vibration data: {vibration}")
-                time.sleep(1)
-        except Exception as e:
-            print(f"Error in ESP32 simulator: {e}")
-            if attempt < max_retries - 1:
-                print(f"Retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-            else:
-                print("Max retries reached. Exiting ESP32 simulator.")
-                break
-
 if __name__ == '__main__':
-    """
-    Main entry point of the application.
-    
-    Purpose: To start the ESP32 simulator in a separate thread and run both Flask 
-    applications (main and prediction) concurrently. This allows the system to 
-    simulate data generation, process incoming requests, and make predictions 
-    simultaneously.
-    """
-    # Start ESP32 simulator in a separate thread
-    simulator_thread = threading.Thread(target=run_esp32_simulator)
-    simulator_thread.start()
-
-    # Run both Flask apps
     main_port = int(os.environ.get('FLASK_MAIN_PORT', 5000))
     prediction_port = int(os.environ.get('FLASK_PREDICTION_PORT', 5001))
 

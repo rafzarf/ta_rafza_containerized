@@ -20,4 +20,3 @@ if __name__ == "__main__":
     while True:
         print(f"Vibration reading: {sensor.get_reading()}")
         time.sleep(1)
-

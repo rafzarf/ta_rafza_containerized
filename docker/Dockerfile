@@ -4,12 +4,14 @@ FROM python:3.9-slim
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install any needed packages specified in requirements.txt
+# Copy the requirements file and install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install paho-mqtt
 
-# Expose port 5000
+# Expose ports
 EXPOSE 5000
+EXPOSE 5001
 
-# Command to run the app (using the code mounted from the 'development' folder)
+# Command to run the app
 CMD ["python", "main.py"]

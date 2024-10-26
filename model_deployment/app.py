@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # InfluxDB connection
 influx_client = InfluxDBClient(
-    url="http://influxdb:8086",
+    url=os.environ.get('INFLUXDB_URL'),
     token=os.environ.get('INFLUXDB_ADMIN_TOKEN'),
     org=os.environ.get('INFLUXDB_INIT_ORG')
 )
@@ -46,5 +46,4 @@ def db_check():
 
 # If this file is executed directly, run the Flask application
 if __name__ == '__main__':
-    # Use host 0.0.0.0 to ensure it's accessible outside the container
-    app.run(host='0.0.0.0', port=int(os.environ.get('FLASK_PORT', 5000)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('FLASK_MAIN_PORT', 5000)))
