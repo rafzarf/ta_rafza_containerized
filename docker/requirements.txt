@@ -2,6 +2,7 @@
 Flask
 influxdb-client
 psycopg2-binary
+flask-mqtt
 
 # Sensor simulator dependencies
 numpy

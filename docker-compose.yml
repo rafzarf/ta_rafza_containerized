@@ -1,17 +1,12 @@
 services:
-  # Flask service
-  flask:
+  # Dedicated async Flask container
+  flask_app:
     build:
       context: ./docker
       dockerfile: Dockerfile
     container_name: flask_app
     ports:
-      - "${FLASK_MAIN_PORT}:5000"
-      - "${FLASK_PREDICTION_PORT}:5001"
-    volumes:
-      - ./model_deployment:/app
-      - ./sensor_simulator:/sensor_simulator
-      - ./machine_learning:/machine_learning  # Added for ML model access
+      - "${FLASK_MAIN_PORT}:5000"   # Map Flask app port
     depends_on:
       influxdb:
         condition: service_healthy
@@ -20,8 +15,7 @@ services:
       mosquitto:
         condition: service_started
     environment:
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1
+      - FLASK_ENV=production
       - INFLUXDB_URL=${INFLUXDB_URL}
       - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
       - INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
@@ -30,30 +24,75 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - FLASK_MAIN_PORT=${FLASK_MAIN_PORT}
       - FLASK_PREDICTION_PORT=${FLASK_PREDICTION_PORT}
-      - PYTHONPATH=/app:/sensor_simulator:/machine_learning  # Updated PYTHONPATH
+      - PYTHONPATH=/app
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"       # Max log file size
+        max-file: "3"         # Keep up to 3 log files
+    command: python /app/model_deployment/main.py  # Run main.py for Flask
 
-  # Grafana service
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3009:3000"
+  # General-purpose container for running Python scripts
+  message_processor:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+    container_name: message_processor
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - SCRIPT_PATH=${SCRIPT_PATH:-/app/model_deployment/message_processor.py}  # Default script
+      - MQTT_BROKER=${MQTT_BROKER}
+      - MQTT_PORT=${MQTT_PORT}
+      - MQTT_TOPIC=${MQTT_TOPIC}
+      - INFLUXDB_URL=${INFLUXDB_URL}
+      - INFLUXDB_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
+      - INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
+      - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     depends_on:
-      influxdb:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    volumes:
-      - grafana_data:/var/lib/grafana
+      - influxdb
+      - postgres
+      - mosquitto
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    command: python $SCRIPT_PATH  # Run the specified script
 
-  # PostgreSQL service
+  # Other services remain the same
+  influxdb:
+    image: influxdb:2.0-alpine
+    container_name: influxdb
+    ports:
+      - "${INFLUXDB_PORT}:8086"
+    environment:
+      - INFLUXDB_INIT_MODE=setup
+      - INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME}
+      - INFLUXDB_INIT_PASSWORD=${INFLUXDB_INIT_PASSWORD}
+      - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
+      - INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
+      - INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_INIT_ADMIN_TOKEN}
+      - INFLUXDB_INIT_RETENTION=${INFLUXDB_INIT_RETENTION}  # Added retention policy
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   postgres:
-    image: postgres:latest
+    image: postgres:alpine
     container_name: postgres_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -65,37 +104,18 @@ services:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
+      interval: 20s
       timeout: 5s
-      retries: 5
+      retries: 3
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # InfluxDB service
-  influxdb:
-    image: influxdb:2.0
-    container_name: influxdb
-    ports:
-      - "${INFLUXDB_PORT}:8086"
-    environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME}
-      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_INIT_PASSWORD}
-      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
-      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
-      - DOCKER_INFLUXDB_INIT_RETENTION=${INFLUXDB_INIT_RETENTION}
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
-    volumes:
-      - influxdb_data:/var/lib/influxdb2
-    healthcheck:
-      test: ["CMD", "influx", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # Mosquitto MQTT Broker service
   mosquitto:
-    image: eclipse-mosquitto:latest
+    image: eclipse-mosquitto
     container_name: mosquitto
     ports:
       - "${MQTT_PORT}:1883"
@@ -105,26 +125,14 @@ services:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     restart: unless-stopped
-
-  # Node-RED service
-  nodered:
-    image: nodered/node-red:latest
-    container_name: nodered
-    ports:
-      - "${NODERED_PORT}:1880"
-    volumes:
-      - nodered_data:/data
-    depends_on:
-      influxdb:
-        condition: service_healthy
-      mosquitto:
-        condition: service_started
-    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
   influxdb_data:
-  grafana_data:
   mosquitto_data:
   mosquitto_log:
-  nodered_data: 

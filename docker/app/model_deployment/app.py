@@ -3,33 +3,37 @@ from flask import Flask, jsonify
 from influxdb_client import InfluxDBClient
 import psycopg2
 
-# Initialize the Flask application
 app = Flask(__name__)
 
-# InfluxDB connection
+# InfluxDB configuration
 influx_client = InfluxDBClient(
     url=os.environ.get('INFLUXDB_URL'),
     token=os.environ.get('INFLUXDB_ADMIN_TOKEN'),
     org=os.environ.get('INFLUXDB_INIT_ORG')
 )
 
-# PostgreSQL connection
+# PostgreSQL connection function
 def get_db_connection():
-    conn = psycopg2.connect(
+    """Establishes a PostgreSQL database connection."""
+    return psycopg2.connect(
         host="postgres",
         database=os.environ.get('POSTGRES_DB'),
         user=os.environ.get('POSTGRES_USER'),
         password=os.environ.get('POSTGRES_PASSWORD')
     )
-    return conn
 
-# Define a simple route
+# Health check endpoint
 @app.route('/')
 def home():
-    return jsonify(message="Hello from Flask mock app!")
+    """Simple health check endpoint."""
+    return jsonify(message="Vibration monitoring API is running!")
 
 @app.route('/db-check')
 def db_check():
+    """
+    Checks the status of both InfluxDB and PostgreSQL databases.
+    Ensures the application can connect to and interact with both databases.
+    """
     influx_health = influx_client.health()
     
     pg_conn = get_db_connection()
@@ -44,6 +48,6 @@ def db_check():
         "postgres_version": pg_version
     })
 
-# If this file is executed directly, run the Flask application
+# Initialize and run the application
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('FLASK_MAIN_PORT', 5000)))
+    app.run(host='0.0.0.0', port=int(os.getenv('FLASK_MAIN_PORT', 5000)))
