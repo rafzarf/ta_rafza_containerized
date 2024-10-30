@@ -63,7 +63,6 @@ services:
         max-file: "3"
     command: python $SCRIPT_PATH  # Run the specified script
 
-  # Other services remain the same
   influxdb:
     image: influxdb:2.0-alpine
     container_name: influxdb
@@ -130,9 +129,53 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+  
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"  # Grafana default port 3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}  # Default Grafana admin user
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}  # Default Grafana password
+    depends_on:
+      - influxdb  # Wait for InfluxDB to start before Grafana
+    volumes:
+      - grafana_data:/var/lib/grafana  # Persist Grafana data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: nodered
+    ports:
+      - "${NODERED_PORT:-1880}:1880"  # Node-RED default port 1880
+    environment:
+      - MQTT_BROKER=${MQTT_BROKER}  # Pass in MQTT broker information
+      - MQTT_PORT=${MQTT_PORT}       # MQTT port for Node-RED to connect
+      - INFLUXDB_URL=${INFLUXDB_URL} # InfluxDB URL for potential Node-RED integration
+    depends_on:
+      - mosquitto  # Node-RED depends on Mosquitto for MQTT
+    volumes:
+      - nodered_data:/data  # Persist Node-RED flows and data
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 
 volumes:
   postgres_data:
   influxdb_data:
   mosquitto_data:
   mosquitto_log:
+  grafana_data:  
+  nodered_data:  
+
