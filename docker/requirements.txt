@@ -1,14 +1,9 @@
-# Flask application dependencies
 Flask
 influxdb-client
 psycopg2-binary
 flask-mqtt
-
-# Sensor simulator dependencies
-numpy
 paho-mqtt
-
-
-# Machine learning dependencies
+numpy
 tensorflow
 pandas
+streamlit

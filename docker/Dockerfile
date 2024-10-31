@@ -1,27 +1,27 @@
-# Dockerfile
-
-# Stage 1: Build dependencies in a minimal base
+# Stage 1: Install dependencies in a build environment
 FROM python:3.9-slim AS builder
 
 WORKDIR /app
 
-# Install dependencies without caching
+# Copy requirements file and install dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir paho-mqtt flask-mqtt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy the application code to the build environment
 COPY app /app
 
-# Stage 2: Create the final image with only the necessary files
+# Stage 2: Create the final image with only the necessary files and packages
 FROM python:3.9-slim
 
 WORKDIR /app
 
-# Copy dependencies and application code from builder stage
+# Copy dependencies and application code from the builder stage
 COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
 COPY --from=builder /app /app
 
-# Expose necessary ports (for Flask app)
+# Expose necessary ports (Flask app)
 EXPOSE 5000
 EXPOSE 5001
+
+# Default command to start the Flask application
+CMD ["python", "/app/model_deployment/main.py"]

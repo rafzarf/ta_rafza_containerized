@@ -1,5 +1,4 @@
 services:
-  # Dedicated async Flask container
   flask_app:
     build:
       context: ./docker
@@ -29,11 +28,12 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "10m"       # Max log file size
-        max-file: "3"         # Keep up to 3 log files
+        max-size: "10m"
+        max-file: "3"
     command: python /app/model_deployment/main.py  # Run main.py for Flask
+    networks:
+      - influxdb_nk
 
-  # General-purpose container for running Python scripts
   message_processor:
     build:
       context: ./docker
@@ -62,6 +62,8 @@ services:
         max-size: "10m"
         max-file: "3"
     command: python $SCRIPT_PATH  # Run the specified script
+    networks:
+      - influxdb_nk
 
   influxdb:
     image: influxdb:2.0-alpine
@@ -75,7 +77,7 @@ services:
       - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
       - INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
       - INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_INIT_ADMIN_TOKEN}
-      - INFLUXDB_INIT_RETENTION=${INFLUXDB_INIT_RETENTION}  # Added retention policy
+      - INFLUXDB_INIT_RETENTION=${INFLUXDB_INIT_RETENTION}
     volumes:
       - influxdb_data:/var/lib/influxdb2
     healthcheck:
@@ -89,6 +91,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - influxdb_nk
 
   postgres:
     image: postgres:alpine
@@ -112,6 +116,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - influxdb_nk
 
   mosquitto:
     image: eclipse-mosquitto
@@ -129,47 +135,51 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - influxdb_nk
   
-  # Grafana
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"  # Grafana default port 3000
+      - "${GRAFANA_PORT:-3000}:3000"
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}  # Default Grafana admin user
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}  # Default Grafana password
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     depends_on:
-      - influxdb  # Wait for InfluxDB to start before Grafana
+      - influxdb
     volumes:
-      - grafana_data:/var/lib/grafana  # Persist Grafana data
+      - grafana_data:/var/lib/grafana
     restart: unless-stopped
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
+    networks:
+      - influxdb_nk
 
   nodered:
     image: nodered/node-red:latest
     container_name: nodered
     ports:
-      - "${NODERED_PORT:-1880}:1880"  # Node-RED default port 1880
+      - "${NODERED_PORT:-1880}:1880"
     environment:
-      - MQTT_BROKER=${MQTT_BROKER}  # Pass in MQTT broker information
-      - MQTT_PORT=${MQTT_PORT}       # MQTT port for Node-RED to connect
-      - INFLUXDB_URL=${INFLUXDB_URL} # InfluxDB URL for potential Node-RED integration
+      - MQTT_BROKER=${MQTT_BROKER}
+      - MQTT_PORT=${MQTT_PORT}
+      - INFLUXDB_URL=${INFLUXDB_URL}
     depends_on:
-      - mosquitto  # Node-RED depends on Mosquitto for MQTT
+      - mosquitto
     volumes:
-      - nodered_data:/data  # Persist Node-RED flows and data
+      - nodered_data:/data
     restart: unless-stopped
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
+    networks:
+      - influxdb_nk
 
 volumes:
   postgres_data:
@@ -179,3 +189,6 @@ volumes:
   grafana_data:  
   nodered_data:  
 
+networks:
+  influxdb_nk:
+    external: true

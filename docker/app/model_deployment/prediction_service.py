@@ -1,12 +1,8 @@
 import os
-from flask import Flask, request, jsonify
 import numpy as np
-from tensorflow.keras.models import load_model
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
-# Load the LSTM model for anomaly detection
-model = load_model('lstm_autoencoder.h5')
 
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -15,8 +11,8 @@ def predict():
         return jsonify({"error": "No data provided"}), 400
 
     try:
-        prediction = model.predict(np.array([data]))
-        anomaly_score = np.mean(np.square(data - prediction))  # Mean squared error as anomaly score
+        # Placeholder: Simulate an anomaly score (to replace with real model later)
+        anomaly_score = np.random.random()
         return jsonify({'anomaly_score': anomaly_score})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

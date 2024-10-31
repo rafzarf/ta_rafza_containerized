@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 
 # Connection settings
-INFLUXDB_URL = "http://192.168.131.251:8086"
+INFLUXDB_URL = "http://192.168.225.251:8086"
 INFLUXDB_TOKEN = "49Zx_X5c9z0f8daAYwjUXBa4Z9e86E1mdOaFLNWDEYZrl_mYI8o6Q0laCn6xqQDBuf68_kAIS3Op858rZspGjA=="
 INFLUXDB_ORG = "polman_bdg"
 INFLUXDB_BUCKET = "ta_rafza"
