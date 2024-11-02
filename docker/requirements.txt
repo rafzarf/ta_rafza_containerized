@@ -4,6 +4,5 @@ psycopg2-binary
 flask-mqtt
 paho-mqtt
 numpy
-tensorflow
 pandas
 streamlit

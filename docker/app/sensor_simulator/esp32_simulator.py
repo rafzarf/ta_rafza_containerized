@@ -5,15 +5,18 @@ import json
 import paho.mqtt.client as mqtt
 
 # MQTT Configuration
-mqtt_broker = "broker.hivemq.com"
+mqtt_broker = "192.168.104.251"
 mqtt_port = 1883
 mqtt_topic = "sensors/accelerometer_data"
 mqtt_status_topic = "sensors/status"
+mqtt_rul_topic = "sensors/rul_prediction"
+mqtt_anomaly_topic = "sensors/anomaly_score"
 
 # System status variables
 last_successful_read = 0
 consecutive_failures = 0
 system_healthy = True
+initial_rul = 100  # Initial Remaining Useful Life in "cycles"
 
 # MQTT client
 mqtt_client = mqtt.Client()
@@ -36,12 +39,23 @@ def publish_mqtt(topic, message):
 
 # Function to simulate reading data from sensors
 def read_sensor_data():
-    # Simulate sensor values as random numbers
     single_axis = round(random.uniform(-10.0, 10.0), 2)
     x_axis = round(random.uniform(-10.0, 10.0), 2)
     y_axis = round(random.uniform(-10.0, 10.0), 2)
     z_axis = round(random.uniform(-10.0, 10.0), 2)
     return single_axis, x_axis, y_axis, z_axis
+
+# Simple anomaly detection function
+def calculate_anomaly_score(data):
+    threshold = 7.5  # Arbitrary threshold for anomaly detection
+    score = max(0, abs(data) - threshold) / threshold
+    return round(score, 2)
+
+# RUL prediction function
+def predict_rul(current_rul, anomaly_score):
+    degradation_factor = 2.5  # Adjust this based on how quickly RUL should decrease with anomalies
+    new_rul = max(0, current_rul - (anomaly_score * degradation_factor))
+    return round(new_rul, 2)
 
 # Function to check system health and publish status
 def check_system_health():
@@ -52,9 +66,9 @@ def check_system_health():
         status = {"status": "healthy" if system_healthy else "error", "failures": consecutive_failures}
         publish_mqtt(mqtt_status_topic, json.dumps(status))
 
-# Task to collect and publish sensor data
+# Task to collect, process, and publish sensor data
 def sensor_data_task():
-    global last_successful_read, consecutive_failures
+    global last_successful_read, consecutive_failures, initial_rul
     sample_count = 0
     x_sum, y_sum, z_sum, single_axis_sum = 0, 0, 0, 0
 
@@ -75,6 +89,24 @@ def sensor_data_task():
                 "samples": sample_count,
                 "timestamp": int(time.time() * 1000)
             }
+
+            # Anomaly Detection
+            anomaly_score = calculate_anomaly_score(avg_data["acceleration"])
+            anomaly_message = {
+                "timestamp": avg_data["timestamp"],
+                "anomaly_score": anomaly_score
+            }
+            publish_mqtt(mqtt_anomaly_topic, json.dumps(anomaly_message))
+
+            # RUL Prediction
+            initial_rul = predict_rul(initial_rul, anomaly_score)
+            rul_message = {
+                "timestamp": avg_data["timestamp"],
+                "predicted_rul": initial_rul
+            }
+            publish_mqtt(mqtt_rul_topic, json.dumps(rul_message))
+
+            # Publish sensor data
             publish_mqtt(mqtt_topic, json.dumps(avg_data))
 
             # Reset the aggregation variables

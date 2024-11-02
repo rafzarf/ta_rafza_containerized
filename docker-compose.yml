@@ -6,6 +6,7 @@ services:
     container_name: flask_app
     ports:
       - "${FLASK_MAIN_PORT}:5000"   # Map Flask app port
+      - "8501:8501"
     depends_on:
       influxdb:
         condition: service_healthy
@@ -30,7 +31,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    command: python /app/model_deployment/main.py  # Run main.py for Flask
+    command: python /app/model_deployment/main_app.py  # Run main.py for Flask
     networks:
       - influxdb_nk
 
@@ -40,7 +41,6 @@ services:
       dockerfile: Dockerfile
     container_name: message_processor
     environment:
-      - SCRIPT_PATH=${SCRIPT_PATH:-/app/model_deployment/message_processor.py}  # Default script
       - MQTT_BROKER=${MQTT_BROKER}
       - MQTT_PORT=${MQTT_PORT}
       - MQTT_TOPIC=${MQTT_TOPIC}

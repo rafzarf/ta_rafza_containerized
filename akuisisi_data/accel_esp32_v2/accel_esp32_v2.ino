@@ -14,7 +14,7 @@ const char* ssid = "DINGINLESTARI";
 const char* password = "ray12345678";
 
 // MQTT Configuration
-const char* mqtt_broker = "192.168.221.251";
+const char* mqtt_broker = "172.16.66.238";
 const int mqtt_port = 1883;
 const char* mqtt_topic = "sensors/accelerometer_data";
 const char* mqtt_status_topic = "sensors/status";  // New topic for status messages
@@ -121,90 +121,56 @@ void setup_modbus() {
   Serial.println("Modbus setup complete.");
 }
 
-// Function to read data from Sensor 1 (Slave ID 1) with improved error handling
+// Function to read data from Sensor 1 (Slave ID 1) with reduced delays
 float readSensor1() {
   uint8_t result;
   uint16_t raw_data_acceleration_1;
 
-  Serial.println("Attempting to read Sensor 1...");
-  
   node.clearResponseBuffer();
   node.begin(1, Serial2);
-  delay(10);
-  
-  for (int retry = 0; retry < 3; retry++) {
-    result = node.readInputRegisters(data_register_x_axis_1, 1);
-    
-    if (result == node.ku8MBSuccess) {
-      raw_data_acceleration_1 = node.getResponseBuffer(0x00);
-      float acceleration_1 = raw_data_acceleration_1 / 10.0;
-      
-      Serial.printf("Sensor 1 read successful - Raw: %d, Converted: %.2f\n", 
-                   raw_data_acceleration_1, acceleration_1);
-      
-      lastSuccessfulRead = millis();
-      consecutiveFailures = 0;
-      return acceleration_1;
-    } else {
-      Serial.printf("Read attempt %d failed. Error code: %d\n", retry + 1, result);
-      delay(100);
-    }
+
+  result = node.readInputRegisters(data_register_x_axis_1, 1);
+  if (result == node.ku8MBSuccess) {
+    raw_data_acceleration_1 = node.getResponseBuffer(0x00);
+    float acceleration_1 = raw_data_acceleration_1 / 10.0;
+    lastSuccessfulRead = millis();
+    consecutiveFailures = 0;
+    return acceleration_1;
+  } else {
+    consecutiveFailures++;
+    return -999.0;
   }
-  
-  consecutiveFailures++;
-  Serial.printf("All attempts to read Sensor 1 failed. Consecutive failures: %d\n", 
-                consecutiveFailures);
-  return -999.0;
 }
 
-// Function to read data from Sensor 2 (Slave ID 2) with improved error handling
+// Function to read data from Sensor 2 (Slave ID 2) with reduced delays
 bool readSensor2(float &xAccel, float &yAccel, float &zAccel) {
   uint8_t result;
-  bool success = true;
-  
+
   node.clearResponseBuffer();
   node.begin(2, Serial2);
-  delay(10);
 
-  // Read X-axis
   result = node.readInputRegisters(data_register_x_axis_2, 1);
   if (result == node.ku8MBSuccess) {
     xAccel = node.getResponseBuffer(0x00) / 10.0;
-    Serial.printf("Sensor 2 X-axis: %.2f\n", xAccel);
   } else {
-    Serial.printf("Error reading X-Axis. Error code: %d\n", result);
-    success = false;
+    return false;
   }
 
-  delay(50);
-
-  // Read Y-axis
-  if (success) {
-    result = node.readInputRegisters(data_register_y_axis_2, 1);
-    if (result == node.ku8MBSuccess) {
-      yAccel = node.getResponseBuffer(0x00) / 10.0;
-      Serial.printf("Sensor 2 Y-axis: %.2f\n", yAccel);
-    } else {
-      Serial.printf("Error reading Y-Axis. Error code: %d\n", result);
-      success = false;
-    }
+  result = node.readInputRegisters(data_register_y_axis_2, 1);
+  if (result == node.ku8MBSuccess) {
+    yAccel = node.getResponseBuffer(0x00) / 10.0;
+  } else {
+    return false;
   }
 
-  delay(50);
-
-  // Read Z-axis
-  if (success) {
-    result = node.readInputRegisters(data_register_z_axis_2, 1);
-    if (result == node.ku8MBSuccess) {
-      zAccel = node.getResponseBuffer(0x00) / 10.0;
-      Serial.printf("Sensor 2 Z-axis: %.2f\n", zAccel);
-    } else {
-      Serial.printf("Error reading Z-Axis. Error code: %d\n", result);
-      success = false;
-    }
+  result = node.readInputRegisters(data_register_z_axis_2, 1);
+  if (result == node.ku8MBSuccess) {
+    zAccel = node.getResponseBuffer(0x00) / 10.0;
+  } else {
+    return false;
   }
 
-  return success;
+  return true;
 }
 
 // Function to publish data to MQTT with health check
@@ -244,54 +210,55 @@ void checkSystemHealth() {
 }
 
 // Task to collect sensor data (runs on Core 1)
+// Modified task to read sensor data at 100 Hz
 void sensorDataTask(void *pvParameters) {
   static float xSum = 0, ySum = 0, zSum = 0, singleAxisSum = 0;
   static int sampleCount = 0;
   
+  unsigned long lastTime = micros();  // Use micros() for more precise timing
+  
   while (true) {
-    checkSystemHealth();
-    
-    // Read from Sensor 1
-    float singleAxisAccel = readSensor1();
-    if (singleAxisAccel != -999.0) {
-      singleAxisSum += singleAxisAccel;
-      sampleCount++;
-    } else if (consecutiveFailures >= 5) {
-      Serial.println("Resetting Modbus due to consecutive failures");
-      setup_modbus();
-      delay(1000);
+    unsigned long currentTime = micros();
+    if (currentTime - lastTime >= 10000) {  // 10000 microseconds = 10 ms (100 Hz)
+      lastTime = currentTime;
+
+      // Read from Sensor 1
+      float singleAxisAccel = readSensor1();
+      if (singleAxisAccel != -999.0) {
+        singleAxisSum += singleAxisAccel;
+        sampleCount++;
+      }
+
+      // Read from Sensor 2
+      float xAccel, yAccel, zAccel;
+      if (readSensor2(xAccel, yAccel, zAccel)) {
+        xSum += xAccel;
+        ySum += yAccel;
+        zSum += zAccel;
+      }
+
+      // Publish data every 10 samples
+      if (sampleCount >= 10) {
+        DynamicJsonDocument doc(256);
+        doc["acceleration"] = singleAxisSum / sampleCount;
+        doc["x"] = xSum / sampleCount;
+        doc["y"] = ySum / sampleCount;
+        doc["z"] = zSum / sampleCount;
+        doc["samples"] = sampleCount;
+        doc["timestamp"] = millis();
+        
+        char jsonBuffer[256];
+        serializeJson(doc, jsonBuffer);
+        publishMQTT(mqtt_topic, jsonBuffer);
+
+        // Reset aggregation variables
+        xSum = ySum = zSum = singleAxisSum = 0;
+        sampleCount = 0;
+      }
     }
 
-    delay(50);
-
-    // Read from Sensor 2
-    float xAccel, yAccel, zAccel;
-    if (readSensor2(xAccel, yAccel, zAccel)) {
-      xSum += xAccel;
-      ySum += yAccel;
-      zSum += zAccel;
-    }
-
-    // Publish aggregated data every 10 samples
-    if (sampleCount >= 10) {
-      DynamicJsonDocument doc(256);
-      doc["acceleration"] = singleAxisSum / sampleCount;
-      doc["x"] = xSum / sampleCount;
-      doc["y"] = ySum / sampleCount;
-      doc["z"] = zSum / sampleCount;
-      doc["samples"] = sampleCount;
-      doc["timestamp"] = millis();
-      
-      char jsonBuffer[256];
-      serializeJson(doc, jsonBuffer);
-      publishMQTT(mqtt_topic, jsonBuffer);
-
-      // Reset aggregation variables
-      xSum = ySum = zSum = singleAxisSum = 0;
-      sampleCount = 0;
-    }
-
-    delay(100);  // Sampling delay
+    // Minimal delay to allow task switching
+    delayMicroseconds(50);
   }
 }
 

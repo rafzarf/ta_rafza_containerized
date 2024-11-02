@@ -7,7 +7,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the application code to the build environment
+# Copy the application code and templates to the build environment
 COPY app /app
 
 # Stage 2: Create the final image with only the necessary files and packages
@@ -19,9 +19,8 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
 COPY --from=builder /app /app
 
-# Expose necessary ports (Flask app)
+# Expose necessary port for Flask
 EXPOSE 5000
-EXPOSE 5001
 
-# Default command to start the Flask application
-CMD ["python", "/app/model_deployment/main.py"]
+# Run the Flask application
+CMD ["python", "app/model_deployment/main_app.py"]

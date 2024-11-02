@@ -9,13 +9,13 @@ const char* ssid = "DINGINLESTARI";
 const char* password = "ray12345678";
 
 // MQTT Configuration
-const char* mqtt_broker = "192.168.131.251";
+const char* mqtt_broker = "172.16.67.121";
 const int mqtt_port = 1883;
 const char* topic_3axis = "sensors/accelerometer_3axis";
 const char* topic_1axis = "sensors/accelerometer_1axis";
 
 // InfluxDB Configuration
-#define INFLUXDB_URL "http://192.168.131.251:8086"
+#define INFLUXDB_URL "http://172.16.67.121:8086"
 #define INFLUXDB_TOKEN "49Zx_X5c9z0f8daAYwjUXBa4Z9e86E1mdOaFLNWDEYZrl_mYI8o6Q0laCn6xqQDBuf68_kAIS3Op858rZspGjA=="
 #define INFLUXDB_ORG "polman_bdg"
 #define INFLUXDB_BUCKET "ta_rafza"
