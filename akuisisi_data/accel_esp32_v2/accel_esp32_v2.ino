@@ -14,10 +14,10 @@ const char* ssid = "DINGINLESTARI";
 const char* password = "ray12345678";
 
 // MQTT Configuration
-const char* mqtt_broker = "172.16.66.238";
+const char* mqtt_broker = "172.16.67.139";
 const int mqtt_port = 1883;
 const char* mqtt_topic = "sensors/accelerometer_data";
-const char* mqtt_status_topic = "sensors/status";  // New topic for status messages
+const char* mqtt_status_topic = "sensors/status";
 
 // Register data for reading accelerometer data
 const uint16_t data_register_x_axis_1 = 0x0003;  // Sensor 1 (1-axis)
@@ -29,6 +29,17 @@ const uint16_t data_register_z_axis_2 = 0x000C;  // Sensor 2 (Z-axis)
 unsigned long lastSuccessfulRead = 0;
 int consecutiveFailures = 0;
 bool systemHealthy = true;
+
+// Debug flags
+bool debug_sensor1 = true;
+bool debug_sensor2 = true;
+bool debug_mqtt = true;
+
+// Watchdog and monitoring variables
+unsigned long lastDataPublication = 0;
+unsigned long lastHealthCheck = 0;
+const unsigned long HEALTH_CHECK_INTERVAL = 5000;  // 5 seconds
+const unsigned long DATA_TIMEOUT = 10000;  // 10 seconds
 
 // ModbusMaster instance for both sensors (slaves)
 ModbusMaster node;
@@ -121,10 +132,19 @@ void setup_modbus() {
   Serial.println("Modbus setup complete.");
 }
 
+// Function to log debug messages
+void debugLog(const char* component, const char* message) {
+  Serial.printf("[%lu] %s: %s\n", millis(), component, message);
+}
+
 // Function to read data from Sensor 1 (Slave ID 1) with reduced delays
 float readSensor1() {
   uint8_t result;
   uint16_t raw_data_acceleration_1;
+
+  if (debug_sensor1) {
+    debugLog("Sensor1", "Attempting to read...");
+  }
 
   node.clearResponseBuffer();
   node.begin(1, Serial2);
@@ -135,38 +155,54 @@ float readSensor1() {
     float acceleration_1 = raw_data_acceleration_1 / 10.0;
     lastSuccessfulRead = millis();
     consecutiveFailures = 0;
+    
+    if (debug_sensor1) {
+      debugLog("Sensor1", String("Read successful: " + String(acceleration_1)).c_str());
+    }
     return acceleration_1;
   } else {
     consecutiveFailures++;
+    debugLog("Sensor1", String("Read failed, error code: " + String(result)).c_str());
     return -999.0;
   }
 }
 
 // Function to read data from Sensor 2 (Slave ID 2) with reduced delays
 bool readSensor2(float &xAccel, float &yAccel, float &zAccel) {
-  uint8_t result;
+  if (debug_sensor2) {
+    debugLog("Sensor2", "Starting read sequence");
+  }
 
   node.clearResponseBuffer();
   node.begin(2, Serial2);
 
-  result = node.readInputRegisters(data_register_x_axis_2, 1);
+  // Read X axis
+  uint8_t result = node.readInputRegisters(data_register_x_axis_2, 1);
   if (result == node.ku8MBSuccess) {
     xAccel = node.getResponseBuffer(0x00) / 10.0;
+    if (debug_sensor2) debugLog("Sensor2", String("X axis: " + String(xAccel)).c_str());
   } else {
+    debugLog("Sensor2", String("X axis read failed: " + String(result)).c_str());
     return false;
   }
 
+  // Read Y axis
   result = node.readInputRegisters(data_register_y_axis_2, 1);
   if (result == node.ku8MBSuccess) {
     yAccel = node.getResponseBuffer(0x00) / 10.0;
+    if (debug_sensor2) debugLog("Sensor2", String("Y axis: " + String(yAccel)).c_str());
   } else {
+    debugLog("Sensor2", String("Y axis read failed: " + String(result)).c_str());
     return false;
   }
 
+  // Read Z axis
   result = node.readInputRegisters(data_register_z_axis_2, 1);
   if (result == node.ku8MBSuccess) {
     zAccel = node.getResponseBuffer(0x00) / 10.0;
+    if (debug_sensor2) debugLog("Sensor2", String("Z axis: " + String(zAccel)).c_str());
   } else {
+    debugLog("Sensor2", String("Z axis read failed: " + String(result)).c_str());
     return false;
   }
 
@@ -177,15 +213,17 @@ bool readSensor2(float &xAccel, float &yAccel, float &zAccel) {
 void publishMQTT(const char* topic, const char* message) {
   if (!mqttClient.connected()) {
     if (!connectMQTT()) {
-      Serial.println("Failed to reconnect to MQTT");
+      debugLog("MQTT", "Failed to reconnect");
       return;
     }
   }
   
   if (mqttClient.publish(topic, message)) {
-    Serial.println("Data published successfully");
+    if (debug_mqtt) {
+      debugLog("MQTT", String("Data published: " + String(message)).c_str());
+    }
   } else {
-    Serial.println("Failed to publish data");
+    debugLog("MQTT", "Failed to publish data");
   }
 }
 
@@ -210,17 +248,23 @@ void checkSystemHealth() {
 }
 
 // Task to collect sensor data (runs on Core 1)
-// Modified task to read sensor data at 100 Hz
 void sensorDataTask(void *pvParameters) {
   static float xSum = 0, ySum = 0, zSum = 0, singleAxisSum = 0;
   static int sampleCount = 0;
+  static int taskIterations = 0;
   
-  unsigned long lastTime = micros();  // Use micros() for more precise timing
+  unsigned long lastTime = micros();
   
   while (true) {
     unsigned long currentTime = micros();
-    if (currentTime - lastTime >= 10000) {  // 10000 microseconds = 10 ms (100 Hz)
+    
+    if (currentTime - lastTime >= 10000) {  // 100 Hz sampling
       lastTime = currentTime;
+      taskIterations++;
+
+      if (taskIterations % 100 == 0) {  // Log every 100 iterations
+        debugLog("Task", String("Iterations: " + String(taskIterations)).c_str());
+      }
 
       // Read from Sensor 1
       float singleAxisAccel = readSensor1();
@@ -249,7 +293,13 @@ void sensorDataTask(void *pvParameters) {
         
         char jsonBuffer[256];
         serializeJson(doc, jsonBuffer);
+        
+        if (debug_mqtt) {
+          debugLog("MQTT", String("Publishing: " + String(jsonBuffer)).c_str());
+        }
+        
         publishMQTT(mqtt_topic, jsonBuffer);
+        lastDataPublication = millis();
 
         // Reset aggregation variables
         xSum = ySum = zSum = singleAxisSum = 0;
@@ -257,8 +307,13 @@ void sensorDataTask(void *pvParameters) {
       }
     }
 
-    // Minimal delay to allow task switching
-    delayMicroseconds(50);
+    // Check for task blocking
+    if (millis() - lastDataPublication > DATA_TIMEOUT) {
+      debugLog("WARNING", "No data published for 10 seconds!");
+    }
+
+    // Allow other tasks to run
+    vTaskDelay(1);  // Changed from delayMicroseconds to vTaskDelay
   }
 }
 
@@ -291,12 +346,26 @@ void setup() {
 }
 
 void loop() {
-  // Main loop runs on Core 0
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi connection lost. Reconnecting...");
-    connectWiFi();
+  static unsigned long lastWifiCheck = 0;
+  const unsigned long WIFI_CHECK_INTERVAL = 5000;  // Check WiFi every 5 seconds
+  
+  unsigned long currentMillis = millis();
+  
+  // Periodic WiFi check
+  if (currentMillis - lastWifiCheck >= WIFI_CHECK_INTERVAL) {
+    lastWifiCheck = currentMillis;
+    if (WiFi.status() != WL_CONNECTED) {
+      debugLog("WiFi", "Connection lost, reconnecting...");
+      connectWiFi();
+    }
   }
   
-  mqttClient.loop();  // Handle MQTT messages
+  // Health check
+  if (currentMillis - lastHealthCheck >= HEALTH_CHECK_INTERVAL) {
+    lastHealthCheck = currentMillis;
+    checkSystemHealth();
+  }
+  
+  mqttClient.loop();
   delay(10);
 }
