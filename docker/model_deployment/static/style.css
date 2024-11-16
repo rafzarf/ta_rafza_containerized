@@ -1,0 +1,9 @@
+.metric {
+    font-size: 1.25rem;
+    color: #6c757d;
+}
+
+.alert {
+    color: red;
+    font-weight: bold;
+}

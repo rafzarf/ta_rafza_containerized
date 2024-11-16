@@ -1,8 +1,0 @@
-Flask
-influxdb-client
-psycopg2-binary
-flask-mqtt
-paho-mqtt
-numpy
-pandas
-streamlit

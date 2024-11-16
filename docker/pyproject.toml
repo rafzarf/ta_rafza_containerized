@@ -1,0 +1,27 @@
+[project]
+name = "docker-v1"
+version = "0.1.0"
+description = "A project description here"
+readme = "README.md"
+requires-python = ">=3.9"
+
+dependencies = [
+    "Flask==2.0.2", # Or specify the version you need
+    "influxdb-client",
+    "psycopg2-binary",
+    "flask-mqtt",
+    "paho-mqtt",
+    "numpy<2", # Restrict numpy to a version below 2
+    "pandas",
+    "protobuf==3.20.3", # Compatible protobuf version for TensorFlow
+    "tensorflow-cpu==2.17.0", # Specified TensorFlow version
+    "SQLAlchemy",
+    "python-dotenv",
+    "APScheduler",
+    "Werkzeug==2.0.3",
+    "joblib",
+    "scikit-learn>=1.5.2",
+    "uvicorn>=0.32.0",
+    "fastapi>=0.115.4",
+    "diagrams>=0.24.1",
+]

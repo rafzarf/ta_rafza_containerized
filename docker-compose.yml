@@ -1,83 +1,15 @@
-services:
-  flask_app:
-    build:
-      context: ./docker
-      dockerfile: Dockerfile
-    container_name: flask_app
-    ports:
-      - "${FLASK_MAIN_PORT}:5000"   # Map Flask app port
-      - "8501:8501"
-    depends_on:
-      influxdb:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      mosquitto:
-        condition: service_started
-    environment:
-      - FLASK_ENV=production
-      - INFLUXDB_URL=${INFLUXDB_URL}
-      - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
-      - INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - FLASK_MAIN_PORT=${FLASK_MAIN_PORT}
-      - FLASK_PREDICTION_PORT=${FLASK_PREDICTION_PORT}
-      - PYTHONPATH=/app
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    command: python /app/model_deployment/main_app.py  # Run main.py for Flask
-    networks:
-      - influxdb_nk
-
-  message_processor:
-    build:
-      context: ./docker
-      dockerfile: Dockerfile
-    container_name: message_processor
-    environment:
-      - MQTT_BROKER=${MQTT_BROKER}
-      - MQTT_PORT=${MQTT_PORT}
-      - MQTT_TOPIC=${MQTT_TOPIC}
-      - INFLUXDB_URL=${INFLUXDB_URL}
-      - INFLUXDB_ADMIN_TOKEN=${INFLUXDB_ADMIN_TOKEN}
-      - INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
-      - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    depends_on:
-      - influxdb
-      - postgres
-      - mosquitto
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    command: python $SCRIPT_PATH  # Run the specified script
-    networks:
-      - influxdb_nk
-
+services:  
   influxdb:
     image: influxdb:2.0-alpine
     container_name: influxdb
     ports:
-      - "${INFLUXDB_PORT}:8086"
+      - "${INFLUXDB_PORT:-8086}:8086"
     environment:
       - INFLUXDB_INIT_MODE=setup
       - INFLUXDB_INIT_USERNAME=${INFLUXDB_INIT_USERNAME}
       - INFLUXDB_INIT_PASSWORD=${INFLUXDB_INIT_PASSWORD}
       - INFLUXDB_INIT_ORG=${INFLUXDB_INIT_ORG}
       - INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
-      - INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_INIT_ADMIN_TOKEN}
-      - INFLUXDB_INIT_RETENTION=${INFLUXDB_INIT_RETENTION}
     volumes:
       - influxdb_data:/var/lib/influxdb2
     healthcheck:
@@ -85,24 +17,18 @@ services:
       interval: 20s
       timeout: 5s
       retries: 3
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - influxdb_nk
 
   postgres:
     image: postgres:alpine
     container_name: postgres_db
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -110,12 +36,6 @@ services:
       interval: 20s
       timeout: 5s
       retries: 3
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - influxdb_nk
 
@@ -123,21 +43,14 @@ services:
     image: eclipse-mosquitto
     container_name: mosquitto
     ports:
-      - "${MQTT_PORT}:1883"
-      - "${MQTT_WS_PORT}:9001"
+      - "${MQTT_PORT:-1883}:1883"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
       - mosquitto_data:/mosquitto/data
-      - mosquitto_log:/mosquitto/log
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - influxdb_nk
-  
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -146,16 +59,18 @@ services:
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      # SMTP settings
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${SMTP_HOST:-smtp.example.com:587}         # SMTP server and port
+      - GF_SMTP_USER=${SMTP_USER:-your_smtp_username}           # SMTP username
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD:-your_smtp_password}   # SMTP password
+      - GF_SMTP_SKIP_VERIFY=${SMTP_SKIP_VERIFY:-true}           # Skip TLS verification if needed
+      - GF_SMTP_FROM_ADDRESS=${SMTP_FROM_ADDRESS:-grafana@example.com}  # From email address
+      - GF_SMTP_FROM_NAME=${SMTP_FROM_NAME:-Grafana}   
     depends_on:
       - influxdb
     volumes:
       - grafana_data:/var/lib/grafana
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - influxdb_nk
 
@@ -166,18 +81,11 @@ services:
       - "${NODERED_PORT:-1880}:1880"
     environment:
       - MQTT_BROKER=${MQTT_BROKER}
-      - MQTT_PORT=${MQTT_PORT}
       - INFLUXDB_URL=${INFLUXDB_URL}
     depends_on:
       - mosquitto
     volumes:
       - nodered_data:/data
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     networks:
       - influxdb_nk
 
@@ -185,9 +93,8 @@ volumes:
   postgres_data:
   influxdb_data:
   mosquitto_data:
-  mosquitto_log:
-  grafana_data:  
-  nodered_data:  
+  grafana_data:
+  nodered_data:
 
 networks:
   influxdb_nk:
