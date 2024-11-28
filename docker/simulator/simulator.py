@@ -5,7 +5,7 @@ import paho.mqtt.client as mqtt
 from datetime import datetime
 
 # MQTT Configuration
-MQTT_BROKER = "192.168.66.251"  # Replace with your broker's IP
+MQTT_BROKER = "172.19.0.2"  # Replace with your broker's IP
 MQTT_PORT = 1883
 MQTT_TOPIC_DATA = "sensors/accelerometer_data_simulated"
 MQTT_TOPIC_STATUS = "sensors/status"
@@ -40,8 +40,8 @@ client.connect(MQTT_BROKER, MQTT_PORT, 60)
 client.loop_start()
 
 # Initialize global variables for simulating gradual degradation
-base_x, base_y, base_z, base_acceleration = 1.0, 1.0, 1.0, 1.0
-degradation_rate = 0.00001  # Rate at which vibration increases over time
+base_x, base_y, base_z, base_acceleration = 0.0, 0.0, 0.0, 0.0
+degradation_rate = 0.0001  # Rate at which vibration increases over time
 
 # Counter for spike simulation
 spike_counter = 0
