@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 
 dependencies = [
-    "Flask==2.0.2", # Or specify the version you need
+    "flask[async]==2.0.2", # Or specify the version you need
     "influxdb-client",
     "psycopg2-binary",
     "flask-mqtt",
@@ -22,6 +22,9 @@ dependencies = [
     "joblib",
     "scikit-learn>=1.5.2",
     "uvicorn>=0.32.0",
-    "fastapi>=0.115.4",
+    "fastapi[standard]>=0.115.4",
     "diagrams>=0.24.1",
+    "asyncio>=3.4.3",
+    "msgpack>=1.1.0",
+    "matplotlib>=3.9.3",
 ]
